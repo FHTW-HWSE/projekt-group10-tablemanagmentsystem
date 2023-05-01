@@ -61,7 +61,7 @@ void tableAdd(restaurant* r, int x, int y)
          }
      }
 
-    Table tablenew = {x, y, false, -1};
+    Table tablenew = {x, y, false, NULL};
 
     r->tables[r -> tablenumber++] = tablenew;
 
