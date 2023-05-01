@@ -1,0 +1,1 @@
+theworld.o: ../theworld.c
