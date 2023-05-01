@@ -16,6 +16,7 @@ typedef struct {
 	char contact[50];
 } Customer;
 
+<<<<<<< HEAD
 /**
  * represents information that is contained in one table
 */
@@ -39,6 +40,14 @@ typedef struct {
 
 } restaurant;
 
+=======
+
+
+
+
+//davor kannst schreiben ASAD
+//MATEUSZ:
+>>>>>>> 3ecc436f4768d63e5dc1d9520b21c5029039b78b
 void tableAdd(restaurant* r, int x, int y)
 {
 
@@ -91,6 +100,7 @@ void tableRemove(restaurant* r, int x, int y)
     printf("Table at position x = %d, y = %d has been removed.\n\n", x, y);
     return;
 }
+<<<<<<< HEAD
 
 void reserveTable(restaurant *r, int tableID, const char *name, const char *contact)
 
@@ -233,3 +243,5 @@ int main()
 	return 0;
 }
 
+=======
+>>>>>>> 3ecc436f4768d63e5dc1d9520b21c5029039b78b
