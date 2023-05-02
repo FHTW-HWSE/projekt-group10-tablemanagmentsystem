@@ -12,6 +12,10 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <unistd.h>
 
 typedef struct {
 	char name[50];
@@ -68,11 +72,11 @@ void write_to_logfile(const char* message) {
 	fclose(logfile);
 }
 
-void save_to_file(restaurant *r, const char *filename) {
+int save_to_file(restaurant *r, const char *filename) {
     FILE *file = fopen(filename, "w");
     if (file == NULL) {
         printf("Error opening save file.\n");
-        return;
+        return -1;
     }
 
     // Write the number of tables to the file
@@ -87,6 +91,7 @@ void save_to_file(restaurant *r, const char *filename) {
     }
 
     fclose(file);
+    return 0;
 }
 
 bool load_from_file(restaurant *r, const char *filename) {
@@ -303,6 +308,48 @@ void query_occupied_tables_within_distance(restaurant *r, int table_id, float di
     }
 }
 
+void end_of_the_day(restaurant *r, const char *log_filename, const char *save_filename) {
+    // Save the current state
+    int save_result = save_to_file(r, save_filename);
+    if (save_result == -1) {
+        printf("Error saving the state.\n");
+        return;
+    }
+    write_to_logfile("End of the day.\n");
+
+    // Create the archive directory if it doesn't exist
+    struct stat st = {0};
+    if (stat("archive", &st) == -1) {
+        mkdir("archive", 0700);
+    }
+
+    // Get the current date
+    time_t rawtime;
+    struct tm *timeinfo;
+    char date[20];
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(date, 20, "%Y-%m-%d", timeinfo);
+
+    // Generate the new filenames
+    char log_archive_filename[40];
+    char save_archive_filename[40];
+
+    snprintf(log_archive_filename, 40, "archive/%s_%s", date, log_filename);
+    snprintf(save_archive_filename, 40, "archive/%s_%s", date, save_filename);
+
+    // Print file paths before renaming
+    printf("\nMoving '%s' to '%s'\n", log_filename, log_archive_filename);
+    printf("Moving '%s' to '%s'\n", save_filename, save_archive_filename);
+
+    // Move and rename the log and save files
+    rename(log_filename, log_archive_filename);
+    rename(save_filename, save_archive_filename);
+}
+
+
+
 int main()
 {
 	restaurant r = {0};
@@ -345,9 +392,19 @@ int main()
 	    		"f to cancel a reservation, \n s to show all reservations or q to exit):");
 	    scanf(" %c", &input);
 
-	    if (input == 'q'){
-	    	printf("\nSee you soon!\n\n");
-	    	break;
+	    if (input == 'q') {
+	        printf("Do you want to end the day? (y/n): ");
+	        char end_day_input;
+	        scanf(" %c", &end_day_input);
+
+	    if (end_day_input == 'y' || end_day_input == 'Y') {
+	        end_of_the_day(&r, log_file, save_file);
+	        printf("\nSee you soon!\n\n");
+	        break;
+	      } else {
+	        printf("\nSee you soon!\n\n");
+	        break;
+	      }
 
 	    } else if (input == 'a'){
 	    	int x, y;
@@ -410,8 +467,6 @@ int main()
         	printf("Invalid input.\n");
         }
     }
-
-	save_to_file(&r, save_file);
 	return 0;
 }
 
