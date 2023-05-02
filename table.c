@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 typedef struct {
 	char name[50];
@@ -128,9 +129,9 @@ void tableAdd(restaurant* r, int x, int y)
     // check if there is already a table at that position
     for (int i = 0; i < r->tablenumber; i++)
     {
-         if (r->tables[i].x == x || r->tables[i].y == y)
+         if (r->tables[i].x == x && r->tables[i].y == y)
          {
-             printf("\nNo free space at x = %d, y = %d.\n\n", x, y);
+             printf("\nNo free space at x = %d, y = %d.\n", x, y);
              return;
          }
      }
@@ -159,7 +160,7 @@ void tableRemove(restaurant* r, int x, int y)
         }
     }
     if (index == -1) {
-        printf("Table at position (%d, %d) does not exist.\n\n", x, y);
+        printf("Table at position (%d, %d) does not exist.\n", x, y);
         return;
     }
 
@@ -169,7 +170,7 @@ void tableRemove(restaurant* r, int x, int y)
     }
     r -> tablenumber--;
 
-    printf("Table at position x = %d, y = %d has been removed.\n\n", x, y);
+    printf("Table at position x = %d, y = %d has been removed.\n", x, y);
     char log_message[100];
     snprintf(log_message, 100,"Table at position x = %d, y = %d has been removed.\n", x, y);
     write_to_logfile(log_message);
@@ -181,7 +182,7 @@ void reserveTable(restaurant *r, int tableID, const char *name, const char *cont
 {
     if (tableID >= r->tablenumber)
     {
-        printf("Table ID %d does not exist.\n\n", tableID);
+        printf("Table ID %d does not exist.\n", tableID);
         return;
     }
 
@@ -189,7 +190,7 @@ void reserveTable(restaurant *r, int tableID, const char *name, const char *cont
 
     if (table->reserved)
     {
-        printf("Table ID %d is already reserved.\n\n", tableID);
+        printf("Table ID %d is already reserved.\n", tableID);
         return;
     }
 
@@ -214,7 +215,7 @@ void reserveTable(restaurant *r, int tableID, const char *name, const char *cont
     //associate the new_customer structure with the table structure (via pointer)
 
     table->customer = new_customer;
-    printf("Table ID %d has been reserved for %s. Contact information: %s.\n\n", tableID, name, contact);
+    printf("Table ID %d has been reserved for %s. Contact information: %s.\n", tableID, name, contact);
     char log_message[100];
     snprintf(log_message, 100,"Table ID %d has been reserved for %s. Contact information: %s.\n", tableID, name, contact);
     write_to_logfile(log_message);
@@ -243,7 +244,7 @@ void free_table(restaurant* r, int tableID) {
 	    table->reserved = false;
 }
 
-void showReservationInfoFromFile(const char *filename) {
+void showReservationInfoFromFile(const char *filename, int filter) {
     restaurant r;
 
     if (!load_from_file(&r, filename)) {
@@ -255,7 +256,13 @@ void showReservationInfoFromFile(const char *filename) {
 
     int table_count = 0;
     for (int i = 0; i < r.tablenumber; i++) {
-        Table *table = &r.tables[i];
+           Table *table = &r.tables[i];
+
+           if (filter == 1 && !table->reserved) {
+               continue;
+           } else if (filter == 2 && table->reserved) {
+               continue;
+           }
 
         printf("Table ID: %d, Position: (%d, %d), Reserved: %s\n", i, table->x, table->y, table->reserved ? "Yes" : "No");
         table_count++;
@@ -268,6 +275,31 @@ void showReservationInfoFromFile(const char *filename) {
     }
     if (table_count == 0) {
     	printf("There are no tables.\n\n");
+    }
+}
+
+float calculate_distance(Table *t1, Table *t2) {
+    int x_diff = t1->x - t2->x;
+    int y_diff = t1->y - t2->y;
+    return sqrt(x_diff * x_diff + y_diff * y_diff);
+}
+
+void query_occupied_tables_within_distance(restaurant *r, int table_id, float distance) {
+    Table *target_table = &r->tables[table_id];
+
+    printf("Occupied tables within %.2f units from Table ID %d:\n\n", distance, table_id);
+
+    int occupied_count = 0;
+    for (int i = 0; i < r->tablenumber; i++) {
+        Table *table = &r->tables[i];
+        if (table->reserved && calculate_distance(target_table, table) <= distance) {
+            printf("Table ID: %d, Position: (%d, %d), Customer Name: %s, Contact: %s\n", i, table->x, table->y, table->customer->name, table->customer->contact);
+            occupied_count++;
+          }
+    }
+
+    if (occupied_count == 0) {
+        printf("No occupied tables within the specified distance.\n");
     }
 }
 
@@ -286,7 +318,7 @@ int main()
 	         if (load_from_file(&r, save_file)) {
 	         	 break;
 	         } else {
-	        	printf("Creating a new log file as the previous one does not exist.\n");
+	        	printf("Creating a new log file as the previous one does not exist.\n\n");
 	        	input = 'n';
 	         }
 	 	 } else if (input == 'n') {
@@ -301,15 +333,15 @@ int main()
 	     if (log_file_handle != NULL) {
 	         fclose(log_file_handle);
 	     }
-	         printf("Starting with a new log file.\n");
+	         printf("Starting with a new log file.\n\n");
 	     } else {
-	    	 printf("Invalid input. Please try again.\n");
+	    	 printf("Invalid input. Please try again.\n\n");
 	     }
 	} while (input != 'l' && input != 'n');
 
 	while (true)
 	{
-	    printf("Enter a function:\n(a = add Table, r = remove Table, b to book a table,"
+	    printf("\nEnter a function:\n(a = add Table, r = remove Table, b to book a table,"
 	    		"f to cancel a reservation, \n s to show all reservations or q to exit):");
 	    scanf(" %c", &input);
 
@@ -353,7 +385,26 @@ int main()
         	save_to_file(&r, save_file);
 
         } else if (input == 's') {
-        	showReservationInfoFromFile(save_file);
+        	 printf("\nDo you want to see all tables, only reserved tables, \nor only free tables? (a = all, r = reserved, f = free): ");
+        	 char filter_choice;
+        	 int filter = 0;
+        	 scanf(" %c", &filter_choice);
+
+        	 if (filter_choice == 'r') {
+        	     filter = 1;
+        	 } else if (filter_choice == 'f') {
+        	     filter = 2;
+        	 } else if (filter_choice != 'a') {
+        	     printf("Invalid input. Please try again.\n");
+        	     break;
+        	 }
+        	 showReservationInfoFromFile(save_file, filter);
+
+        }else if (input == 'd') {
+        	printf("Enter the table ID and distance: ");
+        	int table_id, distance;
+        	scanf("%d %d", &table_id, &distance);
+        	query_occupied_tables_within_distance(&r, table_id, distance);
 
         }else {
         	printf("Invalid input.\n");
