@@ -67,55 +67,54 @@ void write_to_logfile(const char* message) {
 	fclose(logfile);
 }
 
-void save_to_log(restaurant *r, const char *filename) {
-	FILE *file = fopen(filename, "w");
-	if (file == NULL) {
-		printf("Error opening log file.\n");
-		return;
-	}
+void save_to_file(restaurant *r, const char *filename) {
+    FILE *file = fopen(filename, "w");
+    if (file == NULL) {
+        printf("Error opening save file.\n");
+        return;
+    }
 
-	//Write the number of tables to the file
-	fprintf(file, "%d\n", r -> tablenumber);
+    // Write the number of tables to the file
+    fprintf(file, "%d\n", r->tablenumber);
 
-	for (int i = 0; i < r -> tablenumber; i++) {
-		Table *table = &r -> tables[i];
-		fprintf(file, "%d,%d,%d,%s,%s\n",
-				table -> x, table -> y, table -> reserved,
-				table -> reserved ? table -> customer -> name : "",
-				table -> reserved ? table -> customer -> contact : "");
-	}
+    for (int i = 0; i < r->tablenumber; i++) {
+        Table *table = &r->tables[i];
+        fprintf(file, "%d,%d,%d,%s,%s\n",
+                table->x, table->y, table->reserved,
+                table->reserved ? table->customer->name : "",
+                table->reserved ? table->customer->contact : "");
+    }
 
-	fclose(file);
+    fclose(file);
 }
 
-bool load_from_log(restaurant *r, const char *filename) {
-	FILE *file = fopen(filename, "r");
-	if (file == NULL) {
-		printf("Error opening log file.\n");
-		return false;
-	}
+bool load_from_file(restaurant *r, const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        printf("Error opening save file.\n");
+        return false;
+    }
 
-	fscanf(file, "%d", &r -> tablenumber);
+    fscanf(file, "%d", &r->tablenumber);
 
-	for (int i = 0; i < r -> tablenumber; i++) {
-		Table *table = &r -> tables[i];
-		int reserved;
-		fscanf(file, "%d,%d,%d", &table -> x, &table -> y, &reserved);
-		table -> reserved = (bool)reserved;
+    for (int i = 0; i < r->tablenumber; i++) {
+        Table *table = &r->tables[i];
+        int reserved;
+        fscanf(file, "%d,%d,%d", &table->x, &table->y, &reserved);
+        table->reserved = (bool)reserved;
 
-		if (table -> reserved) {
-			table -> customer = (Customer *)malloc(sizeof(Customer));
-			fscanf(file, ",%[^,],%s", table->customer->name, table->customer->contact);
-		} else {
-			table->customer = NULL;
-			fscanf(file, ",,");
-		}
-	}
+        if (table->reserved) {
+            table->customer = (Customer *)malloc(sizeof(Customer));
+            fscanf(file, ",%[^,],%s", table->customer->name, table->customer->contact);
+        } else {
+            table->customer = NULL;
+            fscanf(file, ",,");
+        }
+    }
 
-	fclose(file);
-	return true;
+    fclose(file);
+    return true;
 }
-
 
 void tableAdd(restaurant* r, int x, int y)
 {
@@ -216,6 +215,9 @@ void reserveTable(restaurant *r, int tableID, const char *name, const char *cont
 
     table->customer = new_customer;
     printf("Table ID %d has been reserved for %s. Contact information: %s.\n\n", tableID, name, contact);
+    char log_message[100];
+    snprintf(log_message, 100,"Table ID %d has been reserved for %s. Contact information: %s.\n", tableID, name, contact);
+    write_to_logfile(log_message);
 }
 
 void free_table(restaurant* r, int tableID) {
@@ -232,6 +234,9 @@ void free_table(restaurant* r, int tableID) {
 	    }
 
 	    printf("Table Nr. %d, reserved for %s (contact: %s) is now free.\n\n", tableID, table->customer->name, table->customer->contact);
+	    char log_message[200];
+	    snprintf(log_message, 200,"Table Nr. %d, reserved for %s (contact: %s) is now free.\n", tableID, table->customer->name, table->customer->contact);
+	    write_to_logfile(log_message);
 
 	    free(table->customer);
 	    table->customer = NULL;
@@ -241,23 +246,28 @@ void free_table(restaurant* r, int tableID) {
 void showReservationInfoFromFile(const char *filename) {
     restaurant r;
 
-    if (!load_from_log(&r, filename)) {
+    if (!load_from_file(&r, filename)) {
         printf("Error loading reservations from the save file.\n");
         return;
     }
 
     printf("\nTable reservation information:\n");
 
+    int table_count = 0;
     for (int i = 0; i < r.tablenumber; i++) {
         Table *table = &r.tables[i];
 
-        printf("Table ID: %d, Position: (%d, %d), Reserved: %s", i, table->x, table->y, table->reserved ? "Yes" : "No");
-
+        printf("Table ID: %d, Position: (%d, %d), Reserved: %s\n", i, table->x, table->y, table->reserved ? "Yes" : "No");
+        table_count++;
         if (table->reserved) {
-            printf(",\nCustomer Name: %s, Contact: %s\n", table->customer->name, table->customer->contact);
+            printf("Customer Name: %s, Contact: %s\n\n", table->customer->name, table->customer->contact);
+
         } else {
             printf("\n");
         }
+    }
+    if (table_count == 0) {
+    	printf("There are no tables.\n\n");
     }
 }
 
@@ -265,24 +275,32 @@ int main()
 {
 	restaurant r = {0};
 	char input;
-	char log_file[] = "restaurant_log.csv";
-
-
+    char save_file[] = "restaurant_save.csv";
+    char log_file[] = "restaurant_log.csv";
 	do {
-	 printf("Do you want to load the last log file or create a new one? (l = load, n = new): ");
+	 printf("Do you want to load the last save file or create a new one? (l = load, n = new): ");
 	 scanf(" %c", &input);
 
 	 if (input == 'l') {
 	         // Load the last log file
-	         if (load_from_log(&r, "restaurant_log.csv")) {
+	         if (load_from_file(&r, save_file)) {
 	         	 break;
 	         } else {
 	        	printf("Creating a new log file as the previous one does not exist.\n");
 	        	input = 'n';
 	         }
-	     } else if (input == 'n'){
-	         // Create a new log file
-	         save_to_log(&r, "restaurant_log.csv");
+	 	 } else if (input == 'n') {
+	     // Reset the save file
+	     FILE *save_file_handle = fopen(save_file, "w");
+	     if (save_file_handle != NULL) {
+	         fclose(save_file_handle);
+	     }
+
+	     // Reset the log file
+	     FILE *log_file_handle = fopen(log_file, "w");
+	     if (log_file_handle != NULL) {
+	         fclose(log_file_handle);
+	     }
 	         printf("Starting with a new log file.\n");
 	     } else {
 	    	 printf("Invalid input. Please try again.\n");
@@ -304,6 +322,7 @@ int main()
 	    	printf("\nEnter the position of the new table (x y): ");
 	    	scanf("%d %d", &x, &y);
 	    	tableAdd(&r, x, y);
+	    	save_to_file(&r, save_file);
 
 
 	    } else if (input == 'r') {
@@ -311,12 +330,7 @@ int main()
 	        printf("\nEnter position of table to remove (x y): ");
 	        scanf("%d %d", &x, &y);
 	        tableRemove(&r, x, y);
-
-	    }  else if (input == 'r') {
-            int x, y;
-            printf("\nEnter position of table to remove (x y): ");
-            scanf("%d %d", &x, &y);
-            tableRemove(&r, x, y);
+	        save_to_file(&r, save_file);
 
         } else if (input == 'b') {
         	 int id;
@@ -329,21 +343,24 @@ int main()
         	 printf("\nEnter the customer contact: ");
         	 scanf(" %[^\n]%*c", contact);
         	 reserveTable(&r, id, name, contact);
+        	 save_to_file(&r, save_file);
 
         } else if (input == 'f') {
         	int id;
         	printf("\nEnter the table ID to cancel the reservation: ");
         	scanf("%d", &id);
         	free_table(&r, id);
+        	save_to_file(&r, save_file);
 
         } else if (input == 's') {
-        	showReservationInfoFromFile(log_file);
+        	showReservationInfoFromFile(save_file);
 
         }else {
         	printf("Invalid input.\n");
         }
     }
 
+	save_to_file(&r, save_file);
 	return 0;
 }
 
