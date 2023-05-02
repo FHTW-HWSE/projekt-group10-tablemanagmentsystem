@@ -19,7 +19,7 @@ typedef struct {
 } Customer;
 
 /**
- * represents information that is contained in one table
+ * represents information that is contained in one table!
 */
 typedef struct {
 
