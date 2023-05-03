@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <errno.h>
 
 typedef struct {
 	char name[50];
@@ -97,21 +98,24 @@ int save_to_file(restaurant *r, const char *filename) {
 bool load_from_file(restaurant *r, const char *filename) {
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
-        printf("Error opening save file.\n");
+        printf("Error opening save file: %s\n", strerror(errno));
         return false;
     }
 
     fscanf(file, "%d", &r->tablenumber);
+    printf("\nLoading %d table(s).\n", r->tablenumber);
 
     for (int i = 0; i < r->tablenumber; i++) {
         Table *table = &r->tables[i];
         int reserved;
         fscanf(file, "%d,%d,%d", &table->x, &table->y, &reserved);
         table->reserved = (bool)reserved;
+        printf("\nLoading table %d: x=%d, y=%d, reserved=%d\n", i, table->x, table->y, table->reserved);
 
         if (table->reserved) {
             table->customer = (Customer *)malloc(sizeof(Customer));
             fscanf(file, ",%[^,],%s", table->customer->name, table->customer->contact);
+            printf("Customer: name=%s, contact=%s\n", table->customer->name, table->customer->contact);
         } else {
             table->customer = NULL;
             fscanf(file, ",,");
@@ -121,6 +125,7 @@ bool load_from_file(restaurant *r, const char *filename) {
     fclose(file);
     return true;
 }
+
 
 void tableAdd(restaurant* r, int x, int y)
 {
@@ -348,6 +353,42 @@ void end_of_the_day(restaurant *r, const char *log_filename, const char *save_fi
     rename(save_filename, save_archive_filename);
 }
 
+void clear_input_buffer() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+}
+
+int load_from_archive(restaurant *r) {
+    DIR *dir;
+    struct dirent *entry;
+    char archive_dir[] = "archive";
+
+    dir = opendir(archive_dir);
+    if (dir == NULL) {
+        printf("Error opening archive directory.\n");
+        return -1;
+    }
+
+    printf("Available save files in the archive:\n");
+        while ((entry = readdir(dir)) != NULL) {
+            if (entry->d_type == DT_REG && strstr(entry->d_name, "_restaurant_save.csv") != NULL) {
+                printf("%s\n", entry->d_name);
+            }
+        }
+
+        closedir(dir);
+
+
+        char filename[256];
+        printf("Enter the filename you want to load: ");
+        scanf("%s", filename);
+
+        char full_path[256];
+        snprintf(full_path, sizeof(full_path), "%s/%s", archive_dir, filename);
+
+        return load_from_file(r, full_path) ? 0 : -1;
+
+    }
 
 
 int main()
@@ -462,6 +503,14 @@ int main()
         	int table_id, distance;
         	scanf("%d %d", &table_id, &distance);
         	query_occupied_tables_within_distance(&r, table_id, distance);
+
+        }else if (input == 'z') {
+
+            if (load_from_archive(&r) == 0) {
+                printf("\nLoaded save file from archive successfully.\n");
+            } else {
+                printf("Error loading save file from archive.\n");
+            }
 
         }else {
         	printf("Invalid input.\n");
