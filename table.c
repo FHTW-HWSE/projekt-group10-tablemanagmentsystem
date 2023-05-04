@@ -21,6 +21,7 @@
 typedef struct {
 	char name[50];
 	char contact[50];
+	time_t time_of_reservation;
 } Customer;
 
 /**
@@ -220,6 +221,7 @@ void reserveTable(restaurant *r, int tableID, const char *name, const char *cont
     strncpy(new_customer->contact, contact, sizeof(new_customer->contact) - 1);
     new_customer->contact[sizeof(new_customer->contact) - 1] = '\0';
 
+    new_customer->time_of_reservation = time(NULL);
     //table is now reserved
     table->reserved = true;
 
@@ -246,8 +248,12 @@ void free_table(restaurant* r, int tableID) {
 	    }
 
 	    printf("Table Nr. %d, reserved for %s (contact: %s) is now free.\n\n", tableID, table->customer->name, table->customer->contact);
+	    time_t freed_time = time(NULL);
+	    double reservation_duration = difftime(freed_time, table->customer->time_of_reservation);
+	    printf("Table Nr. %d was reserved for %.0f seconds.\n\n", tableID, reservation_duration);
+
 	    char log_message[200];
-	    snprintf(log_message, 200,"Table Nr. %d, reserved for %s (contact: %s) is now free.\n", tableID, table->customer->name, table->customer->contact);
+	    snprintf(log_message, 200,"Table Nr. %d, reserved for %s (contact: %s) is now free.Reservation duration: %.0f seconds.\n", tableID, table->customer->name, table->customer->contact, reservation_duration);
 	    write_to_logfile(log_message);
 
 	    free(table->customer);
