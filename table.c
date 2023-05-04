@@ -32,6 +32,7 @@ typedef struct {
     int y;          ///< y coordinates of the table
     bool reserved;  ///< reserverd or not
     Customer *customer;  ///<
+    char covid_flag[3]; //for covid flagged
 } Table;
 
 
@@ -390,7 +391,69 @@ int load_from_archive(restaurant *r) {
 
     }
 
+void set_covid_flag(Table *table, const char *flag) {
+    strncpy(table->covid_flag, flag, sizeof(table->covid_flag) - 1);
+    table->covid_flag[sizeof(table->covid_flag) - 1] = '\0';
+}
 
+void process_covid_flagging(restaurant *r, int table_id) {
+    Table *k1_table = &r->tables[table_id];
+    set_covid_flag(k1_table, "K1");
+
+    for (int i = 0; i < r->tablenumber; i++) {
+        Table *table = &r->tables[i];
+        if (calculate_distance(k1_table, table) == 1.0) {
+            set_covid_flag(table, "K2");
+        }
+    }
+}
+
+void save_flagged_tables_to_csv(restaurant *r, const char *filename) {
+    FILE *file = fopen(filename, "a");
+    if (file == NULL) {
+        printf("Error opening COVID file.\n");
+        return;
+    }
+
+    for (int i = 0; i < r->tablenumber; i++) {
+        Table *table = &r->tables[i];
+        if (strcmp(table->covid_flag, "K1") == 0 || strcmp(table->covid_flag, "K2") == 0) {
+            fprintf(file, "%d,%d,%d,%s\n", i, table->x, table->y, table->covid_flag);
+        }
+    }
+
+    fclose(file);
+}
+
+char *generate_covid_filename() {
+    time_t rawtime;
+    struct tm *timeinfo;
+    static char filename[40];
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(filename, sizeof(filename), "%Y-%m-%d_COVID.csv", timeinfo);
+
+    return filename;
+}
+
+void show_covid_info_from_file(const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        printf("Error opening COVID file: %s\n", strerror(errno));
+        return;
+    }
+
+    printf("\nCOVID information:\n");
+    printf("Date,Table ID,K-Type\n");
+
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        printf("%s", line);
+    }
+
+    fclose(file);
+}
 int main()
 {
 	restaurant r = {0};
@@ -512,7 +575,24 @@ int main()
                 printf("Error loading save file from archive.\n");
             }
 
-        }else {
+        }else if (input == 'C') {
+
+                int table_id;
+                printf("\nEnter the table ID to flag as K1: ");
+                scanf("%d", &table_id);
+
+                process_covid_flagging(&r, table_id);
+                save_flagged_tables_to_csv(&r, generate_covid_filename());
+
+	 	}else if (input == 'O') {
+
+            char covid_filename[256];
+            printf("Enter the COVID .csv file name: ");
+            scanf("%s", covid_filename);
+            show_covid_info_from_file(covid_filename);
+
+
+	 	} else {
         	printf("Invalid input.\n");
         }
     }
