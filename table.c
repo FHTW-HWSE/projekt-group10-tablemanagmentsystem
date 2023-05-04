@@ -33,7 +33,9 @@ typedef struct {
     int y;          ///< y coordinates of the table
     bool reserved;  ///< reserverd or not
     Customer *customer;  ///<
-    char covid_flag[3]; //for covid flagged
+    char covid_flag[4]; //for covid flagged
+    time_t start_time;
+    time_t end_time;
 } Table;
 
 
@@ -152,7 +154,7 @@ void tableAdd(restaurant* r, int x, int y)
 
     r->tables[r -> tablenumber++] = tablenew;
 
-    printf("Table Nr. %d added at position x = %d, y = %d.\n\n", r->tablenumber - 1, x, y);
+    printf("Table Nr. %d added at position x = %d, y = %d.\n", r->tablenumber - 1, x, y);
     char log_message[100];
     snprintf(log_message, 100, "Table Nr. %d added at position x = %d, y = %d.\n", r -> tablenumber - 1, x, y);
     write_to_logfile(log_message);
@@ -222,6 +224,9 @@ void reserveTable(restaurant *r, int tableID, const char *name, const char *cont
     new_customer->contact[sizeof(new_customer->contact) - 1] = '\0';
 
     new_customer->time_of_reservation = time(NULL);
+    char reservation_time_str[20];
+    strftime(reservation_time_str, sizeof(reservation_time_str), "%Y-%m-%d %H:%M:%S", localtime(&new_customer->time_of_reservation));
+
     //table is now reserved
     table->reserved = true;
 
@@ -229,9 +234,11 @@ void reserveTable(restaurant *r, int tableID, const char *name, const char *cont
 
     table->customer = new_customer;
     printf("Table ID %d has been reserved for %s. Contact information: %s.\n", tableID, name, contact);
-    char log_message[100];
-    snprintf(log_message, 100,"Table ID %d has been reserved for %s. Contact information: %s.\n", tableID, name, contact);
+    char log_message[200];
+    snprintf(log_message, 200,"Table ID %d has been reserved for %s. Contact information: %s.\nStart of "
+    		"Reservation: %s\n", tableID, name, contact,reservation_time_str);
     write_to_logfile(log_message);
+
 }
 
 void free_table(restaurant* r, int tableID) {
@@ -249,11 +256,18 @@ void free_table(restaurant* r, int tableID) {
 
 	    printf("Table Nr. %d, reserved for %s (contact: %s) is now free.\n\n", tableID, table->customer->name, table->customer->contact);
 	    time_t freed_time = time(NULL);
-	    double reservation_duration = difftime(freed_time, table->customer->time_of_reservation);
-	    printf("Table Nr. %d was reserved for %.0f seconds.\n\n", tableID, reservation_duration);
 
-	    char log_message[200];
-	    snprintf(log_message, 200,"Table Nr. %d, reserved for %s (contact: %s) is now free.Reservation duration: %.0f seconds.\n", tableID, table->customer->name, table->customer->contact, reservation_duration);
+	    char freed_time_str[20];
+	    strftime(freed_time_str, sizeof(freed_time_str), "%Y-%m-%d %H:%M:%S", localtime(&freed_time));
+	    char reservation_time_str[20];
+	    strftime(reservation_time_str, sizeof(reservation_time_str), "%Y-%m-%d %H:%M:%S", localtime(&table->customer->time_of_reservation));
+	    printf("Reservation time start: %s\nReservation time end: %s\n\n", reservation_time_str, freed_time_str);
+
+	    double reservation_duration = difftime(freed_time, table->customer->time_of_reservation);
+	    printf("Table Nr. %d was reserved for %.0f seconds.\n", tableID, reservation_duration);
+
+	    char log_message[400];
+	    snprintf(log_message, 400,"Table Nr. %d, reserved for %s (contact: %s) is now free.\nReservation time start: %s\nReservation time end: %s\nReservation duration: %.0f seconds.\n", tableID, table->customer->name, table->customer->contact,reservation_time_str, freed_time_str, reservation_duration);
 	    write_to_logfile(log_message);
 
 	    free(table->customer);
@@ -360,12 +374,62 @@ void end_of_the_day(restaurant *r, const char *log_filename, const char *save_fi
     rename(save_filename, save_archive_filename);
 }
 
+void search_customer_in_log(const char *name, const char *folder_path) {
+    DIR *dir;
+    struct dirent *entry;
+    char archive_dir[] = "archive";
+
+    dir = opendir(archive_dir);
+    if (dir == NULL) {
+        printf("Error opening archive directory.\n");
+        return;
+    }
+
+    printf("Available log files in the archive:\n");
+        while ((entry = readdir(dir)) != NULL) {
+            if (entry->d_type == DT_REG && strstr(entry->d_name, "_restaurant_log.csv") != NULL) {
+                printf("%s\n", entry->d_name);
+            }
+        }
+
+        while ((entry = readdir(dir)) != NULL) {
+         if (entry->d_type == DT_REG) {
+             char file_path[512];
+             snprintf(file_path, sizeof(file_path), "%s/%s", folder_path, entry->d_name);
+
+        char filename[256];
+        printf("Enter the filename you want to load: ");
+        scanf("%s", filename);
+
+        char full_path[256];
+        snprintf(full_path, sizeof(full_path), "%s/%s", archive_dir, filename);
+
+        FILE *file = fopen(full_path, "r");
+        if (file == NULL) {
+            printf("Error opening log file: %s\n", full_path);
+            continue;
+        }
+
+        char line[512];
+        while (fgets(line, sizeof(line), file) != NULL) {
+            if (strstr(line, name) != NULL && strstr(line, "Table ID") != NULL && strstr(line, "has been reserved") != NULL) {
+                printf("Reservation found in file %s: %s\n", file_path, line);
+            }
+        }
+
+        fclose(file);
+    }
+}
+
+	closedir(dir);
+}
+
 void clear_input_buffer() {
     int c;
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
-int load_from_archive(restaurant *r) {
+int load_files_from_archive(restaurant *r) {
     DIR *dir;
     struct dirent *entry;
     char archive_dir[] = "archive";
@@ -376,18 +440,22 @@ int load_from_archive(restaurant *r) {
         return -1;
     }
 
-    printf("Available save files in the archive:\n");
-        while ((entry = readdir(dir)) != NULL) {
-            if (entry->d_type == DT_REG && strstr(entry->d_name, "_restaurant_save.csv") != NULL) {
-                printf("%s\n", entry->d_name);
+    printf("\nAvailable files in the archive:\n\n");
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG) {
+            if (strstr(entry->d_name, "_restaurant_save.csv") != NULL) {
+                printf("Save file: %s\n", entry->d_name);
+            } else if (strstr(entry->d_name, "_restaurant_log.csv") != NULL) {
+                printf("Log file: %s\n", entry->d_name);
             }
         }
+    }
 
         closedir(dir);
 
 
         char filename[256];
-        printf("Enter the filename you want to load: ");
+        printf("\nEnter the filename you want to load: ");
         scanf("%s", filename);
 
         char full_path[256];
@@ -396,6 +464,12 @@ int load_from_archive(restaurant *r) {
         return load_from_file(r, full_path) ? 0 : -1;
 
     }
+
+
+
+bool check_time_overlap(time_t start1, time_t end1, time_t start2, time_t end2) {
+    return (start1 < end2) && (start2 < end1);
+}
 
 void set_covid_flag(Table *table, const char *flag) {
     strncpy(table->covid_flag, flag, sizeof(table->covid_flag) - 1);
@@ -408,8 +482,9 @@ void process_covid_flagging(restaurant *r, int table_id) {
 
     for (int i = 0; i < r->tablenumber; i++) {
         Table *table = &r->tables[i];
-        if (calculate_distance(k1_table, table) == 1.0) {
-            set_covid_flag(table, "K2");
+        if (calculate_distance(k1_table, table) == 1.0) { //&&
+        	//check_time_overlap(k1_table->start_time, k1_table->end_time, table->start_time, table->end_time)) {
+        	set_covid_flag(table, "K2");
         }
     }
 }
@@ -490,9 +565,9 @@ int main()
 	     if (log_file_handle != NULL) {
 	         fclose(log_file_handle);
 	     }
-	         printf("Starting with a new log file.\n\n");
+	         printf("Starting with a new log file.\n");
 	     } else {
-	    	 printf("Invalid input. Please try again.\n\n");
+	    	 printf("Invalid input. Please try again.\n");
 	     }
 	} while (input != 'l' && input != 'n');
 
@@ -537,10 +612,11 @@ int main()
         	 char contact[20];
         	 printf("\nEnter the table ID to book: ");
         	 scanf("%d", &id);
-        	 printf("\nEnter the customer name: ");
+        	 printf("Enter the customer name: ");
         	 scanf(" %[^\n]%*c", name);
-        	 printf("\nEnter the customer contact: ");
+        	 printf("Enter the customer contact: ");
         	 scanf(" %[^\n]%*c", contact);
+        	 printf("\n");
         	 reserveTable(&r, id, name, contact);
         	 save_to_file(&r, save_file);
 
@@ -575,7 +651,7 @@ int main()
 
         }else if (input == 'z') {
 
-            if (load_from_archive(&r) == 0) {
+            if (load_files_from_archive(&r) == 0) {
                 printf("\nLoaded save file from archive successfully.\n");
             } else {
                 printf("Error loading save file from archive.\n");
@@ -596,7 +672,6 @@ int main()
             printf("Enter the COVID .csv file name: ");
             scanf("%s", covid_filename);
             show_covid_info_from_file(covid_filename);
-
 
 	 	} else {
         	printf("Invalid input.\n");
