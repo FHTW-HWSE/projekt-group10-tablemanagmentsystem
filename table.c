@@ -5,7 +5,8 @@
  *      Author: osboxes
  */
 
-
+#define _GNU_SOURCE
+#define _XOPEN_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -129,6 +130,23 @@ bool load_from_file(restaurant *r, const char *filename) {
     fclose(file);
     return true;
 }
+
+bool print_savefile_contents(const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL) {
+        printf("Error opening save file.\n");
+        return false;
+    }
+
+    printf("Contents of the log file:\n");
+        char line[256];
+        while (fgets(line, sizeof(line), file)) {
+            printf("%s", line);
+        }
+
+        fclose(file);
+        return true;
+    }
 
 
 void tableAdd(restaurant* r, int x, int y)
@@ -374,55 +392,6 @@ void end_of_the_day(restaurant *r, const char *log_filename, const char *save_fi
     rename(save_filename, save_archive_filename);
 }
 
-void search_customer_in_log(const char *name, const char *folder_path) {
-    DIR *dir;
-    struct dirent *entry;
-    char archive_dir[] = "archive";
-
-    dir = opendir(archive_dir);
-    if (dir == NULL) {
-        printf("Error opening archive directory.\n");
-        return;
-    }
-
-    printf("Available log files in the archive:\n");
-        while ((entry = readdir(dir)) != NULL) {
-            if (entry->d_type == DT_REG && strstr(entry->d_name, "_restaurant_log.csv") != NULL) {
-                printf("%s\n", entry->d_name);
-            }
-        }
-
-        while ((entry = readdir(dir)) != NULL) {
-         if (entry->d_type == DT_REG) {
-             char file_path[512];
-             snprintf(file_path, sizeof(file_path), "%s/%s", folder_path, entry->d_name);
-
-        char filename[256];
-        printf("Enter the filename you want to load: ");
-        scanf("%s", filename);
-
-        char full_path[256];
-        snprintf(full_path, sizeof(full_path), "%s/%s", archive_dir, filename);
-
-        FILE *file = fopen(full_path, "r");
-        if (file == NULL) {
-            printf("Error opening log file: %s\n", full_path);
-            continue;
-        }
-
-        char line[512];
-        while (fgets(line, sizeof(line), file) != NULL) {
-            if (strstr(line, name) != NULL && strstr(line, "Table ID") != NULL && strstr(line, "has been reserved") != NULL) {
-                printf("Reservation found in file %s: %s\n", file_path, line);
-            }
-        }
-
-        fclose(file);
-    }
-}
-
-	closedir(dir);
-}
 
 void clear_input_buffer() {
     int c;
@@ -461,86 +430,259 @@ int load_files_from_archive(restaurant *r) {
         char full_path[256];
         snprintf(full_path, sizeof(full_path), "%s/%s", archive_dir, filename);
 
-        return load_from_file(r, full_path) ? 0 : -1;
-
-    }
-
-
-
-bool check_time_overlap(time_t start1, time_t end1, time_t start2, time_t end2) {
-    return (start1 < end2) && (start2 < end1);
-}
-
-void set_covid_flag(Table *table, const char *flag) {
-    strncpy(table->covid_flag, flag, sizeof(table->covid_flag) - 1);
-    table->covid_flag[sizeof(table->covid_flag) - 1] = '\0';
-}
-
-void process_covid_flagging(restaurant *r, int table_id) {
-    Table *k1_table = &r->tables[table_id];
-    set_covid_flag(k1_table, "K1");
-
-    for (int i = 0; i < r->tablenumber; i++) {
-        Table *table = &r->tables[i];
-        if (calculate_distance(k1_table, table) == 1.0) { //&&
-        	//check_time_overlap(k1_table->start_time, k1_table->end_time, table->start_time, table->end_time)) {
-        	set_covid_flag(table, "K2");
+        if (strstr(filename, "_restaurant_save.csv") != NULL) {
+                printf("Detected save file.\n"); // Add this line for debugging
+                return load_from_file(r, full_path) ? 0 : 1;
+            } else if (strstr(filename, "_restaurant_log.csv") != NULL) {
+                printf("Detected log file.\n"); // Add this line for debugging
+                return print_savefile_contents(full_path) ? 0 : 2;
+            } else {
+                printf("Invalid file type.\n"); // Add this line for debugging
+                return -1;
+            }
         }
-    }
-}
 
-void save_flagged_tables_to_csv(restaurant *r, const char *filename) {
-    FILE *file = fopen(filename, "a");
-    if (file == NULL) {
-        printf("Error opening COVID file.\n");
+void display_available_log_files(const char *folder_path) {
+    DIR *dir;
+    struct dirent *entry;
+
+    dir = opendir(folder_path);
+    if (dir == NULL) {
+        printf("Error opening archive directory.\n");
         return;
     }
 
-    for (int i = 0; i < r->tablenumber; i++) {
-        Table *table = &r->tables[i];
-        if (strcmp(table->covid_flag, "K1") == 0 || strcmp(table->covid_flag, "K2") == 0) {
-            fprintf(file, "%d,%d,%d,%s\n", i, table->x, table->y, table->covid_flag);
+    printf("Available log files in the archive:\n");
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_type == DT_REG && strstr(entry->d_name, "_restaurant_log.csv") != NULL) {
+            printf("%s\n", entry->d_name);
+        }
+    }
+
+    closedir(dir);
+}
+
+void search_customer_in_log(const char *name) {
+    char archive_dir[] = "archive";
+    char filename[256];
+
+    display_available_log_files(archive_dir);
+
+    printf("Enter the filename you want to load: ");
+    scanf("%s", filename);
+
+    char full_path[256];
+    snprintf(full_path, sizeof(full_path), "%s/%s", archive_dir, filename);
+
+    FILE *file = fopen(full_path, "r");
+    if (file == NULL) {
+        printf("Error opening log file: %s\n", full_path);
+        return;
+    }
+
+
+    char line[512];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        if (strstr(line, name) != NULL && strstr(line, "Table ID") != NULL && strstr(line, "has been reserved") != NULL) {
+            printf("\nReservation found in file %s:\n%s\n", full_path, line);
         }
     }
 
     fclose(file);
 }
 
-char *generate_covid_filename() {
-    time_t rawtime;
-    struct tm *timeinfo;
-    static char filename[40];
 
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    strftime(filename, sizeof(filename), "%Y-%m-%d_COVID.csv", timeinfo);
+void process_covid_flagging_by_name(restaurant *r, time_t *k1_start, time_t *k1_end) {
+    char archive_dir[] = "archive";
+    char name[256];
+    char log_file_name[256];
+    char line[512];
+    struct tm tm;
 
-    return filename;
+    printf("Enter the name of the customer you want to flag for COVID: ");
+    scanf("%s", name);
+    printf("Enter the name of the log file (e.g., 2023-05-07_restaurant_log.csv): ");
+    scanf("%s", log_file_name);
+
+    char full_path[256];
+    snprintf(full_path, sizeof(full_path), "%s/%s", archive_dir, log_file_name);
+    FILE *file = fopen(full_path, "r");
+    if (file == NULL) {
+        printf("Error opening log file: %s\n", full_path);
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file) != NULL) {
+        if (strstr(line, name) != NULL) {
+            // Extract table ID from the line
+            char *table_id_str = strstr(line, "Table Nr. ");
+            if (table_id_str != NULL) {
+                table_id_str += strlen("Table Nr. "); // Skip the "Table Nr. " part
+                int table_id = atoi(table_id_str); // Convert to integer
+
+                if (table_id < 0) {
+                    printf("Table ID %d is not valid.\n", table_id);
+                    continue;
+                }
+
+                // Extract start and end times of reservation
+                char *res_start_str = strstr(line, "Start of Reservation: ");
+                char *res_end_str = strstr(line, "Reservation time end: ");
+                if (res_start_str != NULL && strptime(res_start_str + strlen("Start of Reservation: "), "%Y-%m-%d %H:%M:%S", &tm) != NULL) {
+                    *k1_start = mktime(&tm);
+                } else {
+                    printf("Could not find or parse reservation start time in line: %s\n", line);
+                }
+                if (res_end_str != NULL && strptime(res_end_str + strlen("Reservation time end: "), "%Y-%m-%d %H:%M:%S", &tm) != NULL) {
+                    *k1_end = mktime(&tm);
+                } else {
+                    printf("Could not find or parse reservation end time in line: %s\n", line);
+                }
+
+                // Write to COVID.csv file
+                FILE *covid_file = fopen("COVID.csv", "a");
+                if (covid_file == NULL) {
+                    printf("Error opening COVID file: %s\n", strerror(errno));
+                    fclose(file);
+                    return;
+                }
+
+                fprintf(covid_file, "%d,%s,K1\n", table_id, name);
+                fclose(covid_file);
+
+                printf("COVID file has been updated.\n");
+            }
+        }
+    }
+
+    fclose(file);
 }
 
-void show_covid_info_from_file(const char *filename) {
-    FILE *file = fopen(filename, "r");
-    if (file == NULL) {
+void process_covid_flagging_around_k1() {
+    char archive_dir[] = "archive";
+    char log_file_name[256];
+    char line[512];
+    int k1_table_id;
+    int k1_x = -1, k1_y = -1; // -1 means not found
+
+    printf("Enter the table ID of the K1 table: ");
+    scanf("%d", &k1_table_id);
+    printf("Enter the name of the log file (e.g., 2023-05-07_restaurant_log.csv): ");
+    scanf("%s", log_file_name);
+
+    // Open COVID.csv and check if the K1 table id exists
+    FILE *covid_file = fopen("COVID.csv", "r");
+    if (covid_file == NULL) {
         printf("Error opening COVID file: %s\n", strerror(errno));
         return;
     }
+    printf("COVID.csv file opened successfully.\n");  // Debug print statement
 
-    printf("\nCOVID information:\n");
-    printf("Date,Table ID,K-Type\n");
+    while (fgets(line, sizeof(line), covid_file) != NULL) {
+        printf("Test1.\n");  // Debug print statement
+        char line_copy[512];
+        strncpy(line_copy, line, sizeof(line_copy));  // Create a copy of the line
+        if (atoi(strtok(line, ",")) == k1_table_id) { // strtok splits the line at the comma
+        	printf("Test2\n");  // Debug print statement
+        	        if (strstr(line_copy, "K1") != NULL) { // check if the copy of the line has "K1"
+        	            printf("Test3\n");  // Debug print statement
+        	            fclose(covid_file);
+        	            printf("Test4\n");  // Debug print statement
 
-    char line[256];
-    while (fgets(line, sizeof(line), file)) {
-        printf("%s", line);
+                // Open the log file and get the position of the K1 table
+                char full_path[256];
+                snprintf(full_path, sizeof(full_path), "%s/%s", archive_dir, log_file_name);
+                FILE *file = fopen(full_path, "r");
+                if (file == NULL) {
+                    printf("Error opening log file: %s\n", full_path);
+                    return;
+                }
+                printf("Log file opened successfully.\n");  // Debug print statement
+                while (fgets(line, sizeof(line), file) != NULL) {
+                    printf("Checking line in log file: %s", line);  // Print each line that is checked
+
+                    if (strstr(line, "Table Nr. ") != NULL) {
+                        // Extract table ID from the line
+                        char *table_id_str = strstr(line, "Table Nr. ");
+                        table_id_str += strlen("Table Nr. "); // Skip the "Table Nr. " part
+                        int table_id = atoi(table_id_str); // Convert to integer
+
+                        if (table_id == k1_table_id) {
+                            char *x_str = strstr(line, "x = ");
+                            char *y_str = strstr(line, "y = ");
+                            if (x_str != NULL && y_str != NULL) {
+                                x_str += strlen("x = ");
+                                y_str += strlen("y = ");
+                                k1_x = atoi(x_str);
+                                k1_y = atoi(y_str);
+                                break;
+                            }
+                        }
+                    }
+                }
+                fclose(file);
+                break;
+            }
+        }
     }
 
+    if (k1_x == -1 || k1_y == -1) {
+        printf("Could not find the position of the K1 table.\n");
+        return;
+    }
+
+    // Open the log file again and flag tables around K1 as K2
+    char full_path[256];
+    snprintf(full_path, sizeof(full_path), "%s/%s", archive_dir, log_file_name);
+    FILE *file = fopen(full_path, "r");
+    if (file == NULL) {
+        printf("Error opening log file: %s\n", full_path);
+        return;
+    }
+    while (fgets(line, sizeof(line), file) != NULL) {
+        if (strstr(line, "Table Nr. ") != NULL) {
+            // Extract table ID from the line
+            char *table_id_str = strstr(line, "Table Nr. ");
+            table_id_str += strlen("Table Nr. "); // Skip the "Table Nr. " part
+            int table_id = atoi(table_id_str); // Convert to integer
+
+            if (table_id != k1_table_id) {
+            char *x_str = strstr(line, "x = ");
+            char *y_str = strstr(line, "y = ");
+            if (x_str != NULL && y_str != NULL) {
+                x_str += strlen("x = ");
+                y_str += strlen("y = ");
+                int x = atoi(x_str);
+                int y = atoi(y_str);
+
+                if (abs(x - k1_x) <= 1 && abs(y - k1_y) <= 1) {
+                    // The table is around the K1 table, flag it as K2
+                    FILE *covid_file = fopen("COVID.csv", "a");
+                    if (covid_file == NULL) {
+                        printf("Error opening COVID file: %s\n", strerror(errno));
+                        fclose(file);
+                        return;
+                    }
+                    fprintf(covid_file, "%d,,K2\n", table_id); // we don't know the customer name and contact for K2
+                    fclose(covid_file);
+
+                    printf("Table ID %d has been flagged as K2.\n", table_id);
+                }
+            }
+        }
+    }
+    }
     fclose(file);
 }
+
 int main()
 {
 	restaurant r = {0};
 	char input;
     char save_file[] = "restaurant_save.csv";
     char log_file[] = "restaurant_log.csv";
+    time_t k1_start = -1;
+    time_t k1_end = -1;
 	do {
 	 printf("Do you want to load the last save file or create a new one? (l = load, n = new): ");
 	 scanf(" %c", &input);
@@ -651,27 +793,36 @@ int main()
 
         }else if (input == 'z') {
 
-            if (load_files_from_archive(&r) == 0) {
-                printf("\nLoaded save file from archive successfully.\n");
-            } else {
-                printf("Error loading save file from archive.\n");
-            }
+        	int result = load_files_from_archive(&r);
+        	    if (result == 0) {
+        	        printf("\nLoaded save file from archive successfully.\n");
+        	    } else if (result == 1) {
+        	        printf("Error loading save file from archive.\n");
+        	    } else if (result == 2) {
+        	        printf("Error printing log file contents.\n");
+        	    } else {
+        	        printf("Invalid file selected.\n");
+        	    }
 
-        }else if (input == 'C') {
+        }else if (input == 'P') {
+        	char customer_name[256];
+        	printf("Enter the name of the customer you want to search for: ");
+        	scanf("%s", customer_name);
 
-                int table_id;
-                printf("\nEnter the table ID to flag as K1: ");
-                scanf("%d", &table_id);
+        	search_customer_in_log(customer_name);
 
-                process_covid_flagging(&r, table_id);
-                save_flagged_tables_to_csv(&r, generate_covid_filename());
+	 	}else if (input == 'F') {
+	 	    process_covid_flagging_by_name(&r, &k1_start, &k1_end);
+	 	   if (k1_start == -1 || k1_end == -1) {
+	 	       printf("No reservation was found for the specified customer.\n");
+	 	   } else {
+	 	       printf("K1 reservation start: %s", ctime(&k1_start));
+	 	       printf("K1 reservation end: %s", ctime(&k1_end));
+	 	   }
 
-	 	}else if (input == 'O') {
 
-            char covid_filename[256];
-            printf("Enter the COVID .csv file name: ");
-            scanf("%s", covid_filename);
-            show_covid_info_from_file(covid_filename);
+	 	} else if (input == 'K') {
+	 	    process_covid_flagging_around_k1();
 
 	 	} else {
         	printf("Invalid input.\n");
