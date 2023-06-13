@@ -557,7 +557,7 @@ void process_covid_flagging_by_name(restaurant *r, time_t *k1_start, time_t *k1_
 
     // Input customer's name and log file name
     printf("Enter the name of the customer you want to flag for COVID: ");
-    scanf("%s", name);l
+    scanf("%s", name);
     printf("Enter the name of the log file (e.g., 2023-05-07_restaurant_log.csv): ");
     scanf("%s", log_file_name);
 
