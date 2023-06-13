@@ -756,7 +756,7 @@ int main()
     {
         // Display menu for user to choose action
         printf("\nEnter a function:\n(a = add Table, r = remove Table, b to book a table,"
-                "f to cancel a reservation, \n s to show all reservations or q to exit):");
+	    		"f to cancel a reservation,\n P to search for a customer in an old log file. \n s to show all tables. \n z to show archive logs or q to exit):");
         scanf(" %c", &input);
 
         // If user chooses to quit
